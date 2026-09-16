@@ -1,0 +1,1398 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cartas Sonoras</title>
+<script async src="https://docs.opencv.org/4.9.0/opencv.js" onload="onOpenCvScriptLoad();" onerror="onOpenCvScriptError();"></script>
+<!-- Librería JSZip para empaquetar y desempaquetar respaldos -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+  @font-face {
+    font-family: 'Futurist Fixed-Width';
+    src: local('Futurist Fixed-Width'), local('FuturistFixed-Width');
+  }
+
+  :root{
+    --bg:#000000;
+    --surface:#0D0D0D;
+    --surface-2:#181818;
+    --ochre:#C98B3E;
+    --ochre-dim:#8f6329;
+    --green:#5E8C7A;
+    --text:#F5F5F5;
+    --text-muted:#8C8C8C;
+    --danger:#D6684C;
+    --radius:10px;
+    --font-main: 'Futurist Fixed-Width', monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:var(--font-main);
+    min-height:100vh;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+  }
+  h1,h2,h3{
+    font-family:var(--font-main);
+    font-weight:600;
+    margin:0 0 .3em 0;
+    letter-spacing:.2px;
+  }
+  header{
+    width:100%;
+    max-width:520px;
+    padding:28px 20px 14px 20px;
+  }
+  header h1{
+    font-size:1.7rem;
+    font-weight:700;
+  }
+  header p{
+    color:var(--text-muted);
+    margin:0;
+    font-size:.95rem;
+    line-height:1.4;
+  }
+  nav{
+    display:flex;
+    gap:2px;
+    width:100%;
+    max-width:520px;
+    padding:24px 20px 0 20px;
+  }
+  nav button{
+    flex:1;
+    background:none;
+    border:none;
+    border-bottom:2px solid var(--surface-2);
+    color:var(--text-muted);
+    font-family:var(--font-main);
+    font-size:.95rem;
+    padding:12px 6px;
+    cursor:pointer;
+    transition:color .15s ease, border-color .15s ease;
+  }
+  nav button.active{
+    color:var(--text);
+    border-bottom:2px solid var(--ochre);
+  }
+  main{
+    width:100%;
+    max-width:520px;
+    padding:24px 20px 60px 20px;
+    flex:1;
+  }
+  .view{display:none;}
+  .view.active{display:block;}
+
+  .block{
+    background:var(--surface);
+    border:1px solid #1F1F1F;
+    border-radius:var(--radius);
+    padding:20px;
+    margin-bottom:18px;
+    transition: background 0.6s ease;
+  }
+  label.field-label{
+    display:block;
+    font-size:.85rem;
+    color:var(--text-muted);
+    margin-top:4px;
+  }
+  input[type=text]{
+    width:100%;
+    background:var(--surface-2);
+    border:1px solid #2A2A2A;
+    color:var(--text);
+    border-radius:8px;
+    padding:10px;
+    font-family:var(--font-main);
+    font-size:.9rem;
+    margin-top:6px;
+  }
+  .block h3{
+    font-size:1.05rem;
+    color:var(--text);
+    margin-bottom:10px;
+  }
+  .step-label{
+    color:var(--ochre);
+    font-size:.8rem;
+    font-family:var(--font-main);
+    margin-bottom:6px;
+    display:block;
+  }
+  button.action{
+    font-family:var(--font-main);
+    font-size:.95rem;
+    font-weight:500;
+    padding:11px 18px;
+    border-radius:8px;
+    border:none;
+    cursor:pointer;
+    background:var(--ochre);
+    color:#1A1305;
+    transition:filter .15s ease, transform .1s ease;
+  }
+  button.action:hover{filter:brightness(1.08);}
+  button.action:active{transform:scale(.98);}
+  button.secondary{
+    background:var(--surface-2);
+    color:var(--text);
+  }
+  button.danger{
+    background:transparent;
+    color:var(--danger);
+    border:1px solid var(--danger);
+  }
+  button:disabled{opacity:.45; cursor:not-allowed;}
+
+  /* Previsualizador de captura cuadrado */
+  #capture-video{
+    width:100%;
+    aspect-ratio: 1;
+    object-fit: cover;
+    border-radius:8px;
+    background:#000;
+    display:none;
+    margin-top:12px;
+  }
+
+  .row{display:flex; gap:10px; flex-wrap:wrap; margin-top:12px;}
+  input[type=file]{display:none;}
+
+  .thumb-preview{
+    width:100%;
+    aspect-ratio: 1;
+    object-fit: cover;
+    border-radius:8px;
+    margin-top:10px;
+    display:block;
+  }
+
+  .rec-indicator{
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    color:var(--text-muted);
+    font-size:.85rem;
+    margin-top:10px;
+  }
+  .rec-dot{
+    width:9px; height:9px; border-radius:50%;
+    background:var(--danger);
+  }
+  .rec-dot.live{ animation:pulse 1.1s infinite; }
+  @keyframes pulse{0%{opacity:1;}50%{opacity:.25;}100%{opacity:1;}}
+
+  audio{width:100%; margin-top:10px;}
+
+  .gallery{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:10px;
+    margin-top:14px;
+  }
+  .gallery-item{
+    position:relative;
+    border-radius:8px;
+    overflow:hidden;
+    background:var(--surface-2);
+    aspect-ratio:1;
+  }
+  .gallery-item img{width:100%; height:100%; object-fit:cover; display:block;}
+  .gallery-item .code-chip{
+    position:absolute; bottom:4px; left:4px; right:4px;
+    background:rgba(20,23,28,.75);
+    color:var(--text);
+    font-size:.63rem;
+    padding:2px 4px;
+    border-radius:4px;
+    text-align:center;
+    font-family:var(--font-main);
+  }
+  .empty{color:var(--text-muted); font-size:.9rem; margin-top:8px;}
+
+  /* Oráculo view */
+  #view-oraculo {
+    transition: background-color 0.8s ease;
+    border-radius: 12px;
+    padding: 10px;
+  }
+  .scan-wrap{position:relative;}
+  .scan-frame{
+    position:absolute;
+    top:50%; left:50%;
+    width:62%; aspect-ratio:1;
+    transform:translate(-50%,-50%);
+    border:2px solid var(--ochre);
+    border-radius:14px;
+    box-shadow:0 0 0 2000px rgba(0,0,0,.35);
+    pointer-events:none;
+  }
+  .status-line{
+    text-align:center;
+    color:var(--text-muted);
+    font-size:.9rem;
+    margin-top:12px;
+    min-height:1.2em;
+  }
+  
+  /* Estilo de carta tradicional cuadrada con efecto de costura */
+  .reveal{
+    text-align:center;
+    margin-top:8px;
+  }
+  .oracle-card {
+    background: #FFFFFF;
+    border-radius: 12px;
+    padding: 14px;
+    margin: 14px auto 8px auto;
+    box-shadow: 0 12px 35px rgba(0,0,0,0.6);
+    max-width: 240px;
+  }
+  .oracle-card img {
+    width: 100%;
+    aspect-ratio: 1;
+    object-fit: cover;
+    border-radius: 6px;
+    display: block;
+    margin: 0 auto;
+    border: 2px dashed #B8976C;
+    padding: 4px;
+    background: #FFFFFF;
+    box-shadow: inset 0 0 6px rgba(0,0,0,0.1);
+  }
+  #reveal-name {
+    margin-top: 10px;
+    margin-bottom: 2px;
+    font-size: 1.25rem;
+    color: var(--text);
+    letter-spacing: .4px;
+  }
+
+  textarea{
+    width:100%;
+    background:var(--surface-2);
+    border:1px solid #333A44;
+    color:var(--text);
+    border-radius:8px;
+    padding:10px;
+    font-family:var(--font-main);
+    font-size:.9rem;
+    margin-top:12px;
+    resize:vertical;
+    min-height:56px;
+  }
+  .reveal-actions{
+    display:flex;
+    gap:10px;
+    justify-content:center;
+    margin-top:14px;
+    flex-wrap:wrap;
+  }
+  .toast{
+    position:fixed;
+    bottom:20px;
+    left:50%;
+    transform:translateX(-50%);
+    background:var(--surface-2);
+    color:var(--text);
+    padding:10px 16px;
+    border-radius:8px;
+    font-size:.85rem;
+    opacity:0;
+    pointer-events:none;
+    transition:opacity .25s ease;
+    z-index:50;
+    max-width:80%;
+    text-align:center;
+    font-family:var(--font-main);
+  }
+  .toast.show{opacity:1;}
+  .pulse-highlight { animation: pulse 1s infinite; border: 1px solid var(--ochre); }
+</style>
+</head>
+<body>
+
+<nav>
+  <button id="tab-cargar" class="active">Cargar fragmento</button>
+  <button id="tab-oraculo">Pregunta al tejido</button>
+</nav>
+
+<main>
+
+  <!-- ===================== VISTA CARGAR ===================== -->
+  <section id="view-cargar" class="view active">
+
+    <div class="block">
+      <span class="step-label">Paso 1 — Detalle de tejido</span>
+      <h3>Fotografía o sube el detalle del tejido</h3>
+      <p style="color:var(--text-muted); font-size:.85rem; margin:0 0 4px 0;">
+        Esta imagen se imprimirá en la carta y también sirve como su identificador visual: procura una zona del tejido con un patrón claro y bien iluminado[cite: 1].
+      </p>
+      <div class="row">
+        <button class="action" id="btn-open-camera">Usar cámara</button>
+        <button class="action secondary" id="btn-open-file">Subir archivo</button>
+        <input type="file" id="file-input" accept="image/*">
+      </div>
+      <video id="capture-video" autoplay playsinline muted></video>
+      <div class="row" id="capture-controls" style="display:none;">
+        <button class="action" id="btn-snap">Tomar foto</button>
+        <button class="action secondary" id="btn-cancel-camera">Cancelar</button>
+      </div>
+      <canvas id="capture-canvas" style="display:none;"></canvas>
+      <img id="image-preview" class="thumb-preview" style="display:none;">
+    </div>
+
+    <div class="block">
+      <span class="step-label">Paso 2 — Audio</span>
+      <h3>Graba el audio asociado</h3>
+      <div class="row">
+        <button class="action" id="btn-rec-start">Grabar</button>
+        <button class="action danger" id="btn-rec-stop" disabled>Detener</button>
+      </div>
+      <div class="rec-indicator" id="rec-indicator" style="display:none;">
+        <span class="rec-dot live"></span> Grabando…
+      </div>
+      <audio id="audio-preview" controls style="display:none;"></audio>
+    </div>
+
+    <div class="block">
+      <span class="step-label">Paso 3 — Guardar</span>
+      <h3>Ponle un nombre al fragmento del tejido que seleccionaste</h3>
+      <input type="text" id="card-name-input" placeholder="Ej: Chumbe del sol">
+      <p style="color:var(--text-muted); font-size:.85rem; margin:10px 0 10px 0;" id="save-help">
+        Al guardar, la app analiza el patrón del tejido para poder reconocerlo después[cite: 1]. Esto puede tardar un momento.
+      </p>
+      <button class="action" id="btn-save" disabled>Guardar carta</button>
+      <p class="status-line" id="save-status" style="text-align:left; margin-top:8px;"></p>
+    </div>
+
+    <div class="block">
+      <h3>Cartas guardadas</h3>
+      <div class="gallery" id="gallery"></div>
+      <p class="empty" id="gallery-empty">Aún no hay cartas guardadas.</p>
+      <div class="row" style="margin-top: 14px;">
+        <button class="action secondary" id="btn-export" style="flex:1;">Exportar (.zip)</button>
+        <button class="action secondary" id="btn-import" style="flex:1;">Importar (.zip)</button>
+        <input type="file" id="import-file-input" accept=".zip">
+      </div>
+    </div>
+
+  </section>
+
+  <!-- ===================== VISTA PREGUNTA AL TEJIDO ===================== -->
+  <section id="view-oraculo" class="view">
+
+    <div class="block" id="question-step" style="text-align:center;">
+      <h3>¿Qué quieres preguntarle al tejido?</h3>
+      <textarea id="question-input" placeholder="Escribe tu pregunta"></textarea>
+      <div class="row" style="justify-content:center;">
+        <button class="action" id="btn-ask">Continuar</button>
+      </div>
+    </div>
+
+    <div class="block" id="camera-step" style="display:none; text-align:center;">
+      <h3>Muestra el detalle del tejido a la cámara</h3>
+      <div class="scan-wrap">
+        <video id="scan-video" autoplay playsinline muted></video>
+        <div class="scan-frame"></div>
+      </div>
+      <canvas id="scan-canvas" style="display:none;"></canvas>
+      <p class="status-line" id="scan-status">Iniciando cámara…</p>
+      <div class="row" style="justify-content:center;">
+        <button class="action" id="btn-recognize" disabled>Reconocer carta</button>
+        <button class="action secondary" id="btn-change-question">Cambiar pregunta</button>
+      </div>
+    </div>
+
+    <div class="block reveal" id="reveal-box" style="display:none; text-align:center;">
+      <div class="oracle-card">
+        <img id="reveal-image">
+      </div>
+      <h2 id="reveal-name"></h2>
+      <div class="reveal-actions">
+        <button class="action" id="btn-play-answer">Escucha el mensaje del tejido</button>
+        <button class="action secondary" id="btn-scan-again">Hacer otra pregunta</button>
+      </div>
+    </div>
+
+  </section>
+
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============ OpenCV.js loading ============ */
+let cvReady = false;
+let cvReadyResolve;
+const cvReadyPromise = new Promise(res => { cvReadyResolve = res; });
+
+function onOpenCvScriptLoad(){
+  cv['onRuntimeInitialized'] = () => {
+    cvReady = true;
+    cvReadyResolve();
+    document.getElementById('save-status').textContent = '';
+    document.getElementById('scan-status').textContent = 'Muestra el detalle del tejido y presiona "Reconocer carta"';
+    document.getElementById('btn-recognize').disabled = false;
+  };
+}
+function onOpenCvScriptError(){
+  document.getElementById('save-status').textContent = 'No se pudo cargar el motor de reconocimiento visual (revisa tu conexión)[cite: 1].';
+  document.getElementById('scan-status').textContent = 'No se pudo cargar el motor de reconocimiento visual[cite: 1].';
+}
+
+let orbInstance = null;
+function getOrb(){
+  if(!orbInstance) {
+    orbInstance = new cv.ORB(1000, 1.2, 8);
+  }
+  return orbInstance;
+}
+
+const MIN_GOOD_MATCHES = 12;
+
+function toScaledCanvas(source, srcW, srcH, maxSide){
+  let w = srcW, h = srcH;
+  if(Math.max(w,h) > maxSide){
+    const scale = maxSide / Math.max(w,h);
+    w = Math.round(w*scale); h = Math.round(h*scale);
+  }
+  const canvas = document.createElement('canvas');
+  canvas.width = w; canvas.height = h;
+  canvas.getContext('2d').drawImage(source, 0, 0, w, h);
+  return canvas;
+}
+
+function blobToImage(blob){
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = URL.createObjectURL(blob);
+  });
+}
+
+async function computeDescriptorsFromBlob(blob){
+  await cvReadyPromise;
+  const img = await blobToImage(blob);
+  const canvas = toScaledCanvas(img, img.naturalWidth, img.naturalHeight, 640);
+  return computeDescriptorsFromCanvas(canvas);
+}
+
+function computeDescriptorsFromCanvas(canvas){
+  const mat = cv.imread(canvas);
+  const gray = new cv.Mat();
+  cv.cvtColor(mat, gray, cv.COLOR_RGBA2GRAY);
+  const orb = getOrb();
+  const keypoints = new cv.KeyPointVector();
+  const descriptors = new cv.Mat();
+  const mask = new cv.Mat();
+  orb.detectAndCompute(gray, mask, keypoints, descriptors);
+  let result;
+  if(descriptors.rows > 0){
+    result = { rows: descriptors.rows, cols: descriptors.cols, data: new Uint8Array(descriptors.data) };
+  }else{
+    result = { rows: 0, cols: 0, data: new Uint8Array(0) };
+  }
+  mat.delete(); gray.delete(); keypoints.delete(); descriptors.delete(); mask.delete();
+  return result;
+}
+
+function countGoodMatches(queryRows, queryCols, queryData, refRows, refCols, refData){
+  if(queryRows === 0 || refRows === 0) return 0;
+  const queryMat = cv.matFromArray(queryRows, queryCols, cv.CV_8UC1, queryData);
+  const refMat = cv.matFromArray(refRows, refCols, cv.CV_8UC1, refData);
+  const bf = new cv.BFMatcher(cv.NORM_HAMMING, false);
+  const matches = new cv.DMatchVectorVector();
+  let good = 0;
+  try{
+    bf.knnMatch(queryMat, refMat, matches, 2);
+    for(let i=0;i<matches.size();i++){
+      const m = matches.get(i);
+      if(m.size() >= 2){
+        const d0 = m.get(0).distance;
+        const d1 = m.get(1).distance;
+        if(d0 < 0.75 * d1) good++;
+      }
+    }
+  }catch(e){}
+  queryMat.delete(); refMat.delete(); bf.delete(); matches.delete();
+  return good;
+}
+
+/* ============ IndexedDB ============ */
+const DB_NAME = 'oraculoDB';
+const STORE = 'cartas';
+let db;
+
+function openDB(){
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, 1);
+    req.onupgradeneeded = e => {
+      const _db = e.target.result;
+      if(!_db.objectStoreNames.contains(STORE)){
+        _db.createObjectStore(STORE, { keyPath: 'id' });
+      }
+    };
+    req.onsuccess = e => { db = e.target.result; resolve(db); };
+    req.onerror = e => reject(e);
+  });
+}
+
+function saveCard(card){
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, 'readwrite');
+    tx.objectStore(STORE).put(card);
+    tx.oncomplete = () => resolve();
+    tx.onerror = e => reject(e);
+  });
+}
+
+function getAllCards(){
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, 'readonly');
+    const req = tx.objectStore(STORE).getAll();
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = e => reject(e);
+  });
+}
+
+function deleteCard(id){
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, 'readwrite');
+    tx.objectStore(STORE).delete(id);
+    tx.oncomplete = () => resolve();
+    tx.onerror = e => reject(e);
+  });
+}
+
+/* ============ Exportación Completa (ZIP) ============ */
+document.getElementById('btn-export').onclick = async () => {
+  triggerAudioContextInit();
+  await exportarBaseDeDatosCompleta();
+};
+
+async function exportarBaseDeDatosCompleta() {
+  const cards = await getAllCards();
+  if (cards.length === 0) {
+    toast('No hay cartas para exportar.');
+    return;
+  }
+
+  const zip = new JSZip();
+  const dbData = [];
+  const imgFolder = zip.folder("imagenes");
+  const audioFolder = zip.folder("audios");
+
+  for (const card of cards) {
+    const imgFileName = `${card.id}.jpg`;
+    const audioFileName = `${card.id}.webm`;
+
+    imgFolder.file(imgFileName, card.image);
+    audioFolder.file(audioFileName, card.audio);
+
+    dbData.push({
+      id: card.id,
+      name: card.name,
+      createdAt: card.createdAt,
+      imageFile: `imagenes/${imgFileName}`,
+      audioFile: `audios/${audioFileName}`,
+      descRows: card.descRows,
+      descCols: card.descCols,
+      descData: Array.from(card.descData)
+    });
+  }
+
+  zip.file("base_de_datos.json", JSON.stringify(dbData, null, 2));
+
+  try {
+    const content = await zip.generateAsync({ type: "blob" });
+    const dataUrl = URL.createObjectURL(content);
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute("href", dataUrl);
+    downloadAnchor.setAttribute("download", `oraculo_respaldo_completo_${Date.now()}.zip`);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+    toast('Respaldo completo exportado (.zip)');
+  } catch (err) {
+    toast('Error al generar el archivo ZIP');
+  }
+}
+
+/* ============ Importación Completa (ZIP) ============ */
+document.getElementById('btn-import').onclick = () => {
+  triggerAudioContextInit();
+  document.getElementById('import-file-input').click();
+};
+
+document.getElementById('import-file-input').onchange = async (e) => {
+  const file = e.target.files[0];
+  if(!file) return;
+
+  try {
+    toast('Importando respaldo...');
+    const zip = await JSZip.loadAsync(file);
+    const dbFile = zip.file("base_de_datos.json");
+    if(!dbFile) {
+      toast('El archivo ZIP no es válido (falta base_de_datos.json)');
+      return;
+    }
+
+    const jsonText = await dbFile.async("text");
+    const cardsData = JSON.parse(jsonText);
+
+    for(const item of cardsData) {
+      const imgBlob = await zip.file(item.imageFile).async("blob");
+      const audioBlob = await zip.file(item.audioFile).async("blob");
+
+      const card = {
+        id: item.id,
+        name: item.name,
+        createdAt: item.createdAt,
+        image: imgBlob,
+        audio: audioBlob,
+        descRows: item.descRows,
+        descCols: item.descCols,
+        descData: new Uint8Array(item.descData)
+      };
+
+      await saveCard(card);
+    }
+
+    renderGallery();
+
+    const cards = await getAllCards();
+    if(cards.length > 0) {
+      const latest = cards.sort((a,b)=>b.createdAt-a.createdAt)[0];
+      updatePersistentSonification(latest.image);
+      applyOracleBackground(latest.image);
+    }
+
+    toast('¡Respaldo importado con éxito!');
+  } catch (err) {
+    toast('Error al importar el archivo ZIP');
+  }
+
+  e.target.value = '';
+};
+
+/* ============ Helpers ============ */
+function toast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 2400);
+}
+
+function genId(){
+  const chars = 'abcdefghjkmnpqrstuvwxyz23456789';
+  let s = '';
+  for(let i=0;i<8;i++) s += chars[Math.floor(Math.random()*chars.length)];
+  return 'carta-' + s;
+}
+
+/* ============ Audio User-Gesture Activation (Browser Policy Bypass) ============ */
+let audioInitialized = false;
+function triggerAudioContextInit() {
+  if (!audioInitialized) {
+    audioInitialized = true;
+    initPersistentSonification();
+  } else if (window._activeColorAudio && window._activeColorAudio.audioCtx.state === 'suspended') {
+    window._activeColorAudio.audioCtx.resume();
+  }
+}
+
+document.addEventListener('click', triggerAudioContextInit, { once: false });
+document.addEventListener('touchstart', triggerAudioContextInit, { once: false });
+
+/* ============ Tabs ============ */
+const tabCargar = document.getElementById('tab-cargar');
+const tabOraculo = document.getElementById('tab-oraculo');
+const viewCargar = document.getElementById('view-cargar');
+const viewOraculo = document.getElementById('view-oraculo');
+
+tabCargar.onclick = () => {
+  triggerAudioContextInit();
+  tabCargar.classList.add('active'); tabOraculo.classList.remove('active');
+  viewCargar.classList.add('active'); viewOraculo.classList.remove('active');
+  stopScanCamera();
+};
+tabOraculo.onclick = () => {
+  triggerAudioContextInit();
+  tabOraculo.classList.add('active'); tabCargar.classList.remove('active');
+  viewOraculo.classList.add('active'); viewCargar.classList.remove('active');
+  resetOraculoFlow();
+};
+
+/* ============ Vista Cargar: imagen cuadrada ============ */
+let currentImageBlob = null;
+let cameraStream = null;
+
+const captureVideo = document.getElementById('capture-video');
+const captureCanvas = document.getElementById('capture-canvas');
+const captureControls = document.getElementById('capture-controls');
+const imagePreview = document.getElementById('image-preview');
+
+document.getElementById('btn-open-camera').onclick = async () => {
+  triggerAudioContextInit();
+  try{
+    cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+    captureVideo.srcObject = cameraStream;
+    captureVideo.style.display = 'block';
+    captureControls.style.display = 'flex';
+    imagePreview.style.display = 'none';
+  }catch(err){
+    toast('No se pudo acceder a la cámara: ' + err.message);
+  }
+};
+
+document.getElementById('btn-cancel-camera').onclick = () => {
+  if(cameraStream){ cameraStream.getTracks().forEach(t=>t.stop()); cameraStream=null; }
+  captureVideo.style.display = 'none';
+  captureControls.style.display = 'none';
+};
+
+document.getElementById('btn-snap').onclick = () => {
+  const vW = captureVideo.videoWidth;
+  const vH = captureVideo.videoHeight;
+  const size = Math.min(vW, vH);
+  
+  captureCanvas.width = size;
+  captureCanvas.height = size;
+  const sx = (vW - size) / 2;
+  const sy = (vH - size) / 2;
+  
+  captureCanvas.getContext('2d').drawImage(captureVideo, sx, sy, size, size, 0, 0, size, size);
+  captureCanvas.toBlob(blob => {
+    currentImageBlob = blob;
+    imagePreview.src = URL.createObjectURL(blob);
+    imagePreview.style.display = 'block';
+    checkReadyToSave();
+  }, 'image/jpeg', 0.9);
+
+  if(cameraStream){ cameraStream.getTracks().forEach(t=>t.stop()); cameraStream=null; }
+  captureVideo.style.display = 'none';
+  captureControls.style.display = 'none';
+};
+
+document.getElementById('btn-open-file').onclick = () => document.getElementById('file-input').click();
+document.getElementById('file-input').onchange = (e) => {
+  const file = e.target.files[0];
+  if(!file) return;
+  
+  const img = new Image();
+  img.onload = () => {
+    const size = Math.min(img.naturalWidth, img.naturalHeight);
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const sx = (img.naturalWidth - size) / 2;
+    const sy = (img.naturalHeight - size) / 2;
+    canvas.getContext('2d').drawImage(img, sx, sy, size, size, 0, 0, size, size);
+    canvas.toBlob(blob => {
+      currentImageBlob = blob;
+      imagePreview.src = URL.createObjectURL(blob);
+      imagePreview.style.display = 'block';
+      checkReadyToSave();
+    }, 'image/jpeg', 0.9);
+  };
+  img.src = URL.createObjectURL(file);
+};
+
+/* ============ Vista Cargar: audio con Fade Out/In de Sonificación ============ */
+let mediaRecorder = null;
+let audioChunks = [];
+let currentAudioBlob = null;
+
+document.getElementById('btn-rec-start').onclick = async () => {
+  triggerAudioContextInit();
+  try{
+    fadeSonificationVolume(0.1, 0.6);
+
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    mediaRecorder = new MediaRecorder(stream);
+    audioChunks = [];
+    mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+    mediaRecorder.onstop = () => {
+      currentAudioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+      const audioPreview = document.getElementById('audio-preview');
+      audioPreview.src = URL.createObjectURL(currentAudioBlob);
+      audioPreview.style.display = 'block';
+      stream.getTracks().forEach(t=>t.stop());
+      checkReadyToSave();
+
+      fadeSonificationVolume(1.0, 0.8);
+    };
+    mediaRecorder.start();
+    document.getElementById('btn-rec-start').disabled = true;
+    document.getElementById('btn-rec-stop').disabled = false;
+    document.getElementById('rec-indicator').style.display = 'inline-flex';
+  }catch(err){
+    fadeSonificationVolume(1.0, 0.4);
+    toast('No se pudo acceder al micrófono: ' + err.message);
+  }
+};
+
+document.getElementById('btn-rec-stop').onclick = () => {
+  if(mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+  document.getElementById('btn-rec-start').disabled = false;
+  document.getElementById('btn-rec-stop').disabled = true;
+  document.getElementById('rec-indicator').style.display = 'none';
+};
+
+/* ============ Vista Cargar: guardar ============ */
+function checkReadyToSave(){
+  document.getElementById('btn-save').disabled = !(currentImageBlob && currentAudioBlob);
+}
+
+document.getElementById('btn-save').onclick = async () => {
+  triggerAudioContextInit();
+  const saveBtn = document.getElementById('btn-save');
+  const saveStatus = document.getElementById('save-status');
+  saveBtn.disabled = true;
+  saveStatus.textContent = 'Analizando el patrón del tejido…';
+
+  await cvReadyPromise;
+  const desc = await computeDescriptorsFromBlob(currentImageBlob);
+
+  if(desc.rows === 0){
+    saveStatus.textContent = 'No se detectó suficiente detalle en la imagen. Intenta con una zona del tejido más texturizada o mejor iluminada.';
+    saveBtn.disabled = false;
+    return;
+  }
+
+  const id = genId();
+  const nameInput = document.getElementById('card-name-input');
+  const name = nameInput.value.trim() || 'Carta sin nombre';
+  const card = {
+    id,
+    name,
+    image: currentImageBlob,
+    audio: currentAudioBlob,
+    descRows: desc.rows,
+    descCols: desc.cols,
+    descData: desc.data,
+    createdAt: Date.now()
+  };
+  await saveCard(card);
+
+  updatePersistentSonification(currentImageBlob);
+  applyOracleBackground(currentImageBlob);
+
+  saveStatus.textContent = 'Carta "' + name + '" guardada y lista para consultarse.';
+  currentImageBlob = null;
+  currentAudioBlob = null;
+  imagePreview.style.display = 'none';
+  document.getElementById('audio-preview').style.display = 'none';
+  nameInput.value = '';
+  checkReadyToSave();
+
+  toast('Carta guardada y sonificando');
+  renderGallery();
+};
+
+/* ============ Galería ============ */
+async function renderGallery(){
+  const gallery = document.getElementById('gallery');
+  const empty = document.getElementById('gallery-empty');
+  const cards = await getAllCards();
+  gallery.innerHTML = '';
+  empty.style.display = cards.length ? 'none' : 'block';
+  for(const card of cards.sort((a,b)=>b.createdAt-a.createdAt)){
+    const div = document.createElement('div');
+    div.className = 'gallery-item';
+    const imgUrl = URL.createObjectURL(card.image);
+    div.innerHTML = `<img src="${imgUrl}"><div class="code-chip">${card.name || 'Sin nombre'}</div>`;
+    div.title = 'Eliminar esta carta';
+    div.onclick = async () => {
+      if(confirm('¿Eliminar esta carta?')){
+        await deleteCard(card.id);
+        renderGallery();
+      }
+    };
+    gallery.appendChild(div);
+  }
+}
+
+/* ============ Vista Oráculo: reconocimiento visual con Real-Time Feedback ============ */
+const scanVideo = document.getElementById('scan-video');
+const scanCanvas = document.getElementById('scan-canvas');
+const scanStatus = document.getElementById('scan-status');
+const questionStep = document.getElementById('question-step');
+const cameraStep = document.getElementById('camera-step');
+const revealBox = document.getElementById('reveal-box');
+const btnRecognize = document.getElementById('btn-recognize');
+let scanStream = null;
+let currentQuestion = '';
+let liveScanActive = false;
+let liveScanTimeout = null;
+let activeCurrentCard = null;
+
+function resetOraculoFlow(){
+  stopScanCamera();
+  questionStep.style.display = 'block';
+  cameraStep.style.display = 'none';
+  revealBox.style.display = 'none';
+  document.getElementById('question-input').value = '';
+  currentQuestion = '';
+  activeCurrentCard = null;
+  document.getElementById('view-oraculo').style.backgroundColor = 'transparent';
+}
+
+document.getElementById('btn-ask').onclick = () => {
+  triggerAudioContextInit();
+  currentQuestion = document.getElementById('question-input').value.trim();
+  questionStep.style.display = 'none';
+  cameraStep.style.display = 'block';
+  startScanCamera();
+};
+
+document.getElementById('btn-change-question').onclick = () => {
+  stopScanCamera();
+  cameraStep.style.display = 'none';
+  questionStep.style.display = 'block';
+};
+
+async function startScanCamera(){
+  revealBox.style.display = 'none';
+  scanVideo.style.display = 'block';
+  scanStatus.textContent = cvReady ? 'Iniciando cámara…' : 'Cargando motor de reconocimiento visual…';
+  try{
+    scanStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+    scanVideo.srcObject = scanStream;
+    await scanVideo.play();
+    scanStatus.textContent = cvReady ? 'Apunta al tejido dentro del marco…' : 'Cargando motor de reconocimiento visual…';
+    btnRecognize.disabled = !cvReady;
+    
+    if(cvReady) {
+      liveScanActive = true;
+      runLiveFeedbackLoop();
+    }
+  }catch(err){
+    scanStatus.textContent = 'No se pudo acceder a la cámara: ' + err.message;
+  }
+}
+
+function stopScanCamera(){
+  liveScanActive = false;
+  if(liveScanTimeout) clearTimeout(liveScanTimeout);
+  if(scanStream){ scanStream.getTracks().forEach(t=>t.stop()); scanStream=null; }
+  scanVideo.style.display = 'none';
+}
+
+async function runLiveFeedbackLoop(){
+  if(!liveScanActive || !cvReady || !scanVideo.videoWidth) return;
+  
+  try {
+    scanCanvas.width = scanVideo.videoWidth;
+    scanCanvas.height = scanVideo.videoHeight;
+    scanCanvas.getContext('2d').drawImage(scanVideo, 0, 0);
+    const workCanvas = toScaledCanvas(scanCanvas, scanCanvas.width, scanCanvas.height, 350);
+    const queryDesc = computeDescriptorsFromCanvas(workCanvas);
+
+    if(queryDesc.rows > 0){
+      const cards = await getAllCards();
+      let bestScore = 0;
+      let bestCardName = '';
+      for(const card of cards){
+        if(!card.descRows) continue;
+        const score = countGoodMatches(queryDesc.rows, queryDesc.cols, queryDesc.data, card.descRows, card.descCols, card.descData);
+        if(score > bestScore){
+          bestScore = score;
+          bestCardName = card.name;
+        }
+      }
+
+      if(bestScore >= MIN_GOOD_MATCHES){
+        scanStatus.innerHTML = `<span style="color:var(--ochre); font-weight:600;">¡Coincidencia detectada! (${bestScore}/${MIN_GOOD_MATCHES}) — Pulsa Reconocer</span>`;
+        btnRecognize.classList.add('pulse-highlight');
+      } else {
+        scanStatus.textContent = `Buscando alineación... Coincidencias: ${bestScore}/${MIN_GOOD_MATCHES}`;
+        btnRecognize.classList.remove('pulse-highlight');
+      }
+    } else {
+      scanStatus.textContent = 'Buscando detalles del tejido... Acércate o mejora la luz.';
+      btnRecognize.classList.remove('pulse-highlight');
+    }
+  } catch(e) {}
+
+  if(liveScanActive){
+    liveScanTimeout = setTimeout(runLiveFeedbackLoop, 600);
+  }
+}
+
+btnRecognize.onclick = async () => {
+  triggerAudioContextInit();
+  if(!scanVideo.videoWidth) return;
+  liveScanActive = false;
+  btnRecognize.disabled = true;
+  scanStatus.textContent = 'Analizando patrón definitivo…';
+
+  scanCanvas.width = scanVideo.videoWidth;
+  scanCanvas.height = scanVideo.videoHeight;
+  scanCanvas.getContext('2d').drawImage(scanVideo, 0, 0);
+  const workCanvas = toScaledCanvas(scanCanvas, scanCanvas.width, scanCanvas.height, 640);
+  const queryDesc = computeDescriptorsFromCanvas(workCanvas);
+
+  if(queryDesc.rows === 0){
+    scanStatus.textContent = 'No se detectó suficiente detalle. Acerca más la cámara o mejora la iluminación.';
+    btnRecognize.disabled = false;
+    liveScanActive = true;
+    runLiveFeedbackLoop();
+    return;
+  }
+
+  const cards = await getAllCards();
+  let best = null;
+  let bestScore = 0;
+  for(const card of cards){
+    if(!card.descRows) continue;
+    const score = countGoodMatches(queryDesc.rows, queryDesc.cols, queryDesc.data, card.descRows, card.descCols, card.descData);
+    if(score > bestScore){ bestScore = score; best = card; }
+  }
+
+  if(best && bestScore >= MIN_GOOD_MATCHES){
+    stopScanCamera();
+    cameraStep.style.display = 'none';
+    activeCurrentCard = best;
+    document.getElementById('reveal-name').textContent = best.name || 'Carta sin nombre';
+    document.getElementById('reveal-image').src = URL.createObjectURL(best.image);
+    
+    revealBox.style.display = 'block';
+
+    updatePersistentSonification(best.image);
+    applyOracleBackground(best.image);
+    playAnonymousVoice(best.audio);
+    toast('Carta reconocida: sonando ambiente y voz de oráculo');
+  }else{
+    scanStatus.textContent = 'No se reconoció ninguna carta guardada. Intenta de nuevo, más cerca y con buena luz.';
+    btnRecognize.disabled = false;
+    liveScanActive = true;
+    runLiveFeedbackLoop();
+  }
+};
+
+document.getElementById('btn-play-answer').onclick = () => {
+  triggerAudioContextInit();
+  if(activeCurrentCard && activeCurrentCard.audio){
+    playAnonymousVoice(activeCurrentCard.audio);
+  }
+};
+
+document.getElementById('btn-scan-again').onclick = () => {
+  revealBox.style.display = 'none';
+  questionStep.style.display = 'block';
+  btnRecognize.disabled = false;
+};
+
+/* ============ Web Audio API: Anonymous Voice Processor ============ */
+let activeVoiceSource = null;
+
+async function playAnonymousVoice(audioBlob, onEndedCallback) {
+  const audioCtx = window._activeColorAudio ? window._activeColorAudio.audioCtx : new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === 'suspended') {
+    await audioCtx.resume();
+  }
+
+  if (activeVoiceSource) {
+    try { activeVoiceSource.stop(); } catch(e) {}
+  }
+
+  const arrayBuffer = await audioBlob.arrayBuffer();
+  const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+
+  const source = audioCtx.createBufferSource();
+  source.buffer = audioBuffer;
+  activeVoiceSource = source;
+
+  const voiceGain = audioCtx.createGain();
+  voiceGain.gain.setValueAtTime(1.5, audioCtx.currentTime);
+
+  const bandpass = audioCtx.createBiquadFilter();
+  bandpass.type = 'bandpass';
+  bandpass.frequency.setValueAtTime(1100, audioCtx.currentTime);
+  bandpass.Q.setValueAtTime(1.8, audioCtx.currentTime);
+
+  const waveshaper = audioCtx.createWaveShaper();
+  waveshaper.curve = makeVoiceDistortionCurve(25);
+
+  const destinationNode = window._activeColorAudio ? window._activeColorAudio.masterGain : audioCtx.destination;
+
+  source.connect(bandpass);
+  bandpass.connect(waveshaper);
+  waveshaper.connect(voiceGain);
+  voiceGain.connect(destinationNode);
+
+  source.start(0);
+
+  if (onEndedCallback) {
+    source.onended = onEndedCallback;
+  }
+}
+
+function makeVoiceDistortionCurve(amount) {
+  let k = amount,
+    n_samples = 44100,
+    curve = new Float32Array(n_samples),
+    deg = Math.PI / 180;
+  for (let i = 0; i < n_samples; ++i) {
+    let x = (i * 2) / n_samples - 1;
+    curve[i] = (3 + k) * x * 20 * deg / (Math.PI + k * Math.abs(x));
+  }
+  return curve;
+}
+
+
+/* ============ Persistent Color Sonification & Dynamic Background ============ */
+let colorAudioActive = false;
+let colorAudioInterval = null;
+let currentNotes = [146.83, 196.00, 220.00];
+
+async function initPersistentSonification() {
+  if (colorAudioActive) return;
+  colorAudioActive = true;
+
+  const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === 'suspended') {
+    await audioCtx.resume();
+  }
+
+  const masterGain = audioCtx.createGain();
+  masterGain.connect(audioCtx.destination);
+  masterGain.gain.setValueAtTime(1.0, audioCtx.currentTime);
+
+  window._activeColorAudio = { audioCtx, masterGain };
+
+  try {
+    const cards = await getAllCards();
+    if (cards.length > 0) {
+      const latest = cards.sort((a,b)=>b.createdAt-a.createdAt)[0];
+      currentNotes = await extractCardColors(latest.image);
+      applyOracleBackground(latest.image);
+    }
+  } catch(e) {}
+
+  const droneOsc = audioCtx.createOscillator();
+  const droneGain = audioCtx.createGain();
+  const droneFilter = audioCtx.createBiquadFilter();
+
+  droneOsc.type = 'sawtooth';
+  droneOsc.frequency.setValueAtTime(73.42, audioCtx.currentTime);
+  droneFilter.type = 'lowpass';
+  droneFilter.frequency.setValueAtTime(200, audioCtx.currentTime);
+  droneGain.gain.setValueAtTime(0.0001, audioCtx.currentTime);
+
+  droneOsc.connect(droneFilter);
+  droneFilter.connect(droneGain);
+  droneGain.connect(masterGain);
+  droneOsc.start();
+
+  window._activeColorAudio.droneOsc = droneOsc;
+  window._activeColorAudio.droneGain = droneGain;
+
+  let step = 0;
+  let droneActive = false;
+  const eighthNoteTime = 0.27;
+
+  colorAudioInterval = setInterval(() => {
+    if (!colorAudioActive) return;
+
+    if (step % 6 === 0) {
+      if (Math.random() < 0.45) {
+        droneActive = !droneActive;
+        const targetDroneVol = droneActive ? 0.15 : 0.0001;
+        
+        droneGain.gain.cancelScheduledValues(audioCtx.currentTime);
+        droneGain.gain.setValueAtTime(Math.max(droneGain.gain.value, 0.0001), audioCtx.currentTime);
+        droneGain.gain.exponentialRampToValueAtTime(Math.max(targetDroneVol, 0.0001), audioCtx.currentTime + 0.9);
+      }
+    }
+
+    const isAccent = (step % 6 === 0 || step % 6 === 3);
+    const freqIndex = (Math.floor(step / 6) + (step % 6)) % currentNotes.length;
+    const freq = currentNotes[freqIndex];
+
+    playTone(audioCtx, masterGain, freq, isAccent ? 0.18 : 0.08, isAccent ? 0.35 : 0.2);
+
+    step++;
+  }, eighthNoteTime * 1000);
+
+  window._activeColorAudio.interval = colorAudioInterval;
+}
+
+async function updatePersistentSonification(imageBlob) {
+  currentNotes = await extractCardColors(imageBlob);
+}
+
+async function applyOracleBackground(imageBlob) {
+  try {
+    const img = await blobToImage(imageBlob);
+    const canvas = document.createElement('canvas');
+    canvas.width = 10; canvas.height = 10;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0, 10, 10);
+    const data = ctx.getImageData(0, 0, 10, 10).data;
+    let r = 0, g = 0, b = 0, count = 0;
+    for (let i = 0; i < data.length; i += 4) {
+      r += data[i]; g += data[i+1]; b += data[i+2];
+      count++;
+    }
+    r = Math.floor(r / count);
+    g = Math.floor(g / count);
+    b = Math.floor(b / count);
+    const bgR = Math.floor(r * 0.22);
+    const bgG = Math.floor(g * 0.22);
+    const bgB = Math.floor(b * 0.22);
+    document.getElementById('view-oraculo').style.backgroundColor = `rgb(${bgR}, ${bgG}, ${bgB})`;
+  } catch(e) {}
+}
+
+function fadeSonificationVolume(targetVol, duration) {
+  if (window._activeColorAudio && window._activeColorAudio.masterGain) {
+    const ctx = window._activeColorAudio.audioCtx;
+    const gainNode = window._activeColorAudio.masterGain;
+    gainNode.gain.cancelScheduledValues(ctx.currentTime);
+    gainNode.gain.setValueAtTime(Math.max(gainNode.gain.value, 0.0001), ctx.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(Math.max(targetVol, 0.0001), ctx.currentTime + duration);
+  }
+}
+
+/* ============ Typing Mid-Frequency Drone ============ */
+let typingDroneOsc = null;
+let typingDroneGain = null;
+let typingTimeout = null;
+
+document.getElementById('question-input').addEventListener('input', () => {
+  triggerAudioContextInit();
+  startTypingDrone();
+  clearTimeout(typingTimeout);
+  typingTimeout = setTimeout(() => {
+    stopTypingDrone();
+  }, 1200);
+});
+
+function startTypingDrone() {
+  if (typingDroneOsc) return;
+  if (!window._activeColorAudio) return;
+
+  const audioCtx = window._activeColorAudio.audioCtx;
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+
+  typingDroneOsc = audioCtx.createOscillator();
+  typingDroneGain = audioCtx.createGain();
+  const filter = audioCtx.createBiquadFilter();
+
+  typingDroneOsc.type = 'sine';
+  typingDroneOsc.frequency.setValueAtTime(293.66, audioCtx.currentTime);
+
+  filter.type = 'lowpass';
+  filter.frequency.setValueAtTime(600, audioCtx.currentTime);
+
+  typingDroneGain.gain.setValueAtTime(0.0001, audioCtx.currentTime);
+  typingDroneGain.gain.exponentialRampToValueAtTime(0.1, audioCtx.currentTime + 0.4);
+
+  typingDroneOsc.connect(filter);
+  filter.connect(typingDroneGain);
+  typingDroneGain.connect(window._activeColorAudio.masterGain);
+  typingDroneOsc.start();
+}
+
+function stopTypingDrone() {
+  if (!typingDroneOsc) return;
+  const audioCtx = window._activeColorAudio.audioCtx;
+
+  try {
+    typingDroneGain.gain.cancelScheduledValues(audioCtx.currentTime);
+    typingDroneGain.gain.setValueAtTime(Math.max(typingDroneGain.gain.value, 0.0001), audioCtx.currentTime);
+    typingDroneGain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.5);
+    setTimeout(() => {
+      if (typingDroneOsc) {
+        typingDroneOsc.stop();
+        typingDroneOsc.disconnect();
+        typingDroneOsc = null;
+        typingDroneGain = null;
+      }
+    }, 600);
+  } catch(e) {
+    typingDroneOsc = null;
+    typingDroneGain = null;
+  }
+}
+
+function playTone(audioCtx, destinationNode, freq, duration, volume) {
+  try {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    const filter = audioCtx.createBiquadFilter();
+
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(freq * 3, audioCtx.currentTime);
+
+    gain.gain.setValueAtTime(volume, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
+
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(destinationNode);
+
+    osc.start();
+    osc.stop(audioCtx.currentTime + duration);
+  } catch(e) {}
+}
+
+async function extractCardColors(blob) {
+  const img = await blobToImage(blob);
+  const canvas = document.createElement('canvas');
+  canvas.width = 64; canvas.height = 64;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(img, 0, 0, 64, 64);
+  const imgData = ctx.getImageData(0, 0, 64, 64).data;
+  let notes = [];
+  for (let i = 0; i < imgData.length; i += 12 * 4) {
+    let r = imgData[i], g = imgData[i+1], b = imgData[i+2];
+    let hue = rgbToHue(r, g, b);
+    let freq = hueToFrequency(hue);
+    notes.push(freq);
+  }
+  return notes.length > 0 ? notes : [146.83, 196.00, 220.00];
+}
+
+function rgbToHue(r, g, b) {
+  r /= 255; g /= 255; b /= 255;
+  let max = Math.max(r, g, b), min = Math.min(r, g, b);
+  let h, d = max - min;
+  if (d === 0) h = 0;
+  else if (max === r) h = ((g - b) / d) % 6;
+  else if (max === g) h = (b - r) / d + 2;
+  else h = (r - g) / d + 4;
+  h = Math.round(h * 60);
+  if (h < 0) h += 360;
+  return h;
+}
+
+function hueToFrequency(hue) {
+  const scale = [
+    73.42,  82.41,  92.50, 110.00, 123.47, 130.81, 146.83,
+    164.81, 174.61, 196.00, 220.00, 246.94, 293.66, 329.63
+  ];
+  let index = Math.floor((hue / 360) * scale.length);
+  return scale[Math.min(index, scale.length - 1)];
+}
+
+/* ============ Init ============ */
+openDB().then(renderGallery);
+</script>
+</body>
+</html>
